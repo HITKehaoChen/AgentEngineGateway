@@ -1,0 +1,39 @@
+name: Windows CI
+
+on:
+  push:
+    branches:
+      - main
+      - person_chenkehao
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-preflight:
+    name: Windows preflight
+    runs-on: windows-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Show Windows environment
+        shell: pwsh
+        run: |
+          Write-Host "Runner OS: $env:RUNNER_OS"
+          Write-Host "Windows version: $([System.Environment]::OSVersion.VersionString)"
+          Write-Host "PowerShell version: $($PSVersionTable.PSVersion)"
+
+      - name: Run Windows repository preflight
+        shell: pwsh
+        run: ./scripts/ci/windows-preflight.ps1
