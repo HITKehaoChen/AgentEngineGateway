@@ -1039,15 +1039,40 @@ solution/
 
 交付：
 
-- OpenCode + GLM-5.2 最小真实任务；
-- Pi + GLM-5.2 最小真实任务；
+- OpenCode + 统一可替换模型的最小真实任务；比赛交付前以 GLM-5.2 重跑同一探针；
+- Pi + 统一可替换模型的最小真实任务；比赛交付前以 GLM-5.2 重跑同一探针；
 - 两个引擎的原始事件样本；
 - Pi Interaction 可行性结论；
 - Windows 进程模型结论。
 
 门禁：至少确认两个 Harness 均能产生真实工具调用，才进入完整 Adapter 实现。
 
-状态：已通过。OpenCode `1.18.26` 与 Pi `0.84.4` 均已使用同一可替换开发模型完成真实中文路径读取工具调用；Question、Permission、Abort、稳定完成、异常退出和 Windows 进程树清理均已形成原始 Fixture 与映射结论，见 `spikes/phase0/`。
+状态：**Complete / PASS**（2026-09-02）。OpenCode `1.18.26` 与 Pi `0.84.4` 均已使用同一可替换开发模型完成真实中文路径读取工具调用；Question、Permission、Abort、稳定完成、异常退出和 Windows 进程树清理均已形成原始 Fixture 与映射结论，见 `spikes/phase0/`。
+
+结项证据：
+
+| 检查项 | 结果 | 证据 |
+| --- | --- | --- |
+| OpenCode 最小真实模型调用 | PASS | `opencode-tool-read.raw.jsonl` |
+| Pi 最小真实模型调用 | PASS | `pi-tool-read.raw.jsonl` |
+| OpenCode Server/SSE | PASS | 141 条 `opencode-server-interactions.raw.jsonl` |
+| OpenCode Question/Permission/Abort | PASS | 自动探针与 `opencode-server-probe.summary.json` |
+| Pi RPC Interaction/Abort | PASS | 204 条 `pi-rpc-interaction-abort.raw.jsonl` |
+| 规范 Engine Event 映射 | PASS | `MAPPING.md` 与 `canonical-*.expected.jsonl` |
+| Windows 进程树清理 | PASS | OpenCode 端口释放；Pi 根/子进程残留 0 |
+| Pi 每 Session 一进程基线 | PASS | 4/4 并发存活，总工作集约 270.3MiB，清理残留 0 |
+| Fixture 完整性与密钥扫描 | PASS | 7 个 JSONL 全部可解析；仓库无 API Key |
+
+Phase 0 非阻断遗留项及归属：
+
+- GLM-5.2 重跑：模型切换与比赛资源可用后执行，不阻塞 Kernel；归入 Phase 4 交付演练；
+- Windows x64 与全新主机安装：当前验证主机为 Windows ARM64；归入 Phase 4/NFR-001、NFR-008；
+- Office/docx 写入与最终产物验收：Phase 0 只证明 Harness 真实工具链可工作；归入 Phase 4 `office_011`；
+- 最大 Session 数、长时间 Run 和反复创建/删除 Soak：当前只完成 4 个 Pi 进程的启动/清理基线；归入 Phase 3～4 稳定性测试；
+- 非法 JSONL、重复/乱序事件和异常 Fixture：属于 Adapter 契约及故障注入；归入 Phase 1 Fake Adapter 和 Phase 2～3 Adapter 测试；
+- Pi Bridge 生产代码：Phase 0 已证明 RPC Extension UI 可行，正式 Bridge 实现归入 Phase 3。
+
+结论：以上遗留项均已有明确承接阶段，不改变 Harness Port、Gateway Kernel 或 Phase 1 输入，Phase 0 正式关闭。
 
 ### Phase 1：Gateway Kernel + Fake Adapter
 

@@ -34,6 +34,8 @@ OpenCode emitted a tool step ending in `reason=tool-calls`, followed by a new te
 
 Phase 0 status: **PASS**. Both harnesses completed the tool gate; OpenCode Server Question/Permission/Abort and Pi RPC interaction/Abort probes are reproducible through the scripts in `scripts/`.
 
+Exit audit: Phase 0 is sufficient to start Gateway Kernel development. GLM-5.2 reruns, clean Windows x64 installation, Office artifact writes, long-running/session-capacity soak, malformed-event fault injection, and the production Pi Bridge are deliberately assigned to their later implementation or delivery phases rather than being treated as Phase 0 blockers.
+
 ## Pi interaction and abort probes
 
 Pi RPC Extension UI was exercised with the installed `rpc-demo.ts` extension:
