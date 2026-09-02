@@ -1,7 +1,7 @@
 # 多 Agent 引擎可替换网关 SPEC
 
 > 文档类型：Software Design and Development Specification（SDD Spec）  
-> 状态：Draft v0.1  
+> 状态：Draft v0.2
 > 目标分支：`person_chenkehao`  
 > 适用阶段：初赛实现、联调、Windows 验证与交付验收
 
@@ -102,7 +102,7 @@ Gateway MUST NOT 理解或执行具体业务任务。例如“润色 docx 并另
 
 | ID | 决定 |
 | --- | --- |
-| D-001 | Gateway 采用 TypeScript/Node.js 实现，具体支持版本在评测环境确认后锁定。 |
+| D-001 | Gateway 采用 TypeScript/Node.js `24.19.0` 实现；交付包必须安装或携带兼容该版本的运行时。 |
 | D-002 | 进程启动时只实例化一个 Adapter；Session 创建后引擎不可变。 |
 | D-003 | Gateway 拥有规范 Session、Run、Message、Interaction 和 Event 投影；引擎私有对象仅存在于 Adapter。 |
 | D-004 | 按赛题文字与时序图，`prompt_async` 默认阻塞到本轮稳定结束；内部执行仍为异步事件驱动。 |
@@ -112,17 +112,16 @@ Gateway MUST NOT 理解或执行具体业务任务。例如“润色 docx 并另
 | D-008 | Gateway 维护规范消息投影，不直接把引擎原始消息作为北向响应。 |
 | D-009 | 第一版使用内存状态；不建设 Repository/数据库抽象。 |
 | D-010 | 引擎版本必须锁定，启动时必须记录并校验版本。 |
+| D-011 | 工具链基线锁定为 Node.js `24.19.0`、npm `11.17.0`、OpenCode `1.18.26`、Pi `0.84.4`；当前已在 Windows ARM64 验证安装，交付时按评测主机架构安装对应官方构建。升级任一组件必须重新执行 Adapter 黄金事件测试和 Windows E2E。 |
+| D-012 | `prompt_async` 按权威接口规范阻塞到本轮终态；客户端断开不隐式 Abort。U-001 关闭。 |
 
 ### 4.3 待验证项
 
 | ID | 待验证问题 | 区分证据 |
 | --- | --- | --- |
-| U-001 | 裁判是否严格要求 `prompt_async` 阻塞到结束？ | 赛题组确认或评测客户端调用行为。 |
-| U-002 | 请求体 `model` 是否作为真实模型路由，还是仅为协议兼容字段？ | 赛题组提供的模型配置和真实请求。 |
 | U-003 | Pi RPC 是否能完整承载权限与反问语义？ | 最小 Bridge/Extension Spike。 |
 | U-004 | Pi 每 Session 一进程在 Windows 下的启动成本和稳定性是否可接受？ | 并发与连续会话测试。 |
 | U-005 | Office 类任务按最终文件验收，还是要求真实桌面轨迹？ | 赛题组评分说明和 Rollout 采集方式。 |
-| U-006 | 评测方是否在调用 Session API 时传递 `directory` 查询参数？ | 真实评测客户端或联调日志。 |
 
 任一待验证项被事实推翻时，优先调整 Controller 或 Adapter，不改变 Gateway Kernel 的规范模型。
 
@@ -189,6 +188,11 @@ interface GatewaySession {
 ### 6.2 Run
 
 ```typescript
+interface GatewayError {
+  code: string;
+  message: string;
+}
+
 type RunState =
   | "accepted"
   | "running"
@@ -213,6 +217,17 @@ Run 是一次 Prompt 引发的完整任务，不等同于一次 LLM Step 或一�
 ### 6.3 Message
 
 ```typescript
+interface GatewayToolCall {
+  id: string;
+  name: string;
+  arguments: unknown;
+}
+
+type GatewayMessagePart =
+  | { type: "text"; content: string }
+  | { type: "tool"; callId: string; tool: string; state: { status: "running" | "completed"; title?: string } }
+  | { type: "step-finish" };
+
 interface GatewayMessage {
   id: string;
   sessionId: string;
@@ -301,6 +316,28 @@ accepted/running/waiting_* ── abort ──→ aborted
 - 已 Abort Run 的迟到事件：不得更新消息完成状态；
 - Idle Session 执行 Abort：返回 `{ "ok": true }`，保持幂等。
 
+### 7.4 终态裁决与 HTTP 结果
+
+- 每个 Run 只能从非终态原子地进入一次 `completed`、`failed` 或 `aborted`；第一个成功提交的终态获胜；
+- `step.finished(stop)` 只更新消息投影，不单独结束 Run；只有 `run.settled` 可把 Run 置为 `completed`；
+- `run.failed` 和 `run.aborted` 分别把 Run 置为 `failed` 和 `aborted`；
+- Adapter `run()` Promise 必须在规范终态事件提交后才 resolve/reject；若 Promise 提前 resolve 且未发终态事件，Coordinator MUST 转换为 `INTERNAL_ERROR`；
+- 终态后的所有引擎事件视为迟到事件，MUST 忽略且不得修改消息、Interaction 或 Session 状态；
+- 任一终态处理路径都 MUST 在 `finally` 中释放 `activeRunId` 并使未删除 Session 恢复 `idle`；
+- `prompt_async` 的 HTTP 结果如下：
+
+| Run 结果 | HTTP | Code/Body |
+| --- | ---: | --- |
+| completed | 204 | 无响应体 |
+| failed：请求或事件校验失败 | 400 | `VALIDATION_ERROR` |
+| failed：引擎调用失败 | 502 | `BAD_GATEWAY` |
+| failed：引擎未启动、退出或不可用 | 503 | `SERVICE_UNAVAILABLE` |
+| failed：Run 超时 | 504 | `RUN_TIMEOUT` |
+| failed：Gateway 内部错误 | 500 | `INTERNAL_ERROR` |
+| aborted | 204 | 无响应体；Abort 的调用方通过 Abort API 的 `{ "ok": true }` 获得确认 |
+
+HTTP 客户端断开 MUST NOT 改变上述状态机；Coordinator 继续持有 Run，直到终态、显式 Abort、超时或 Gateway 退出。
+
 ## 8. 内部组件
 
 ### 8.1 Competition API
@@ -340,6 +377,20 @@ accepted/running/waiting_* ── abort ──→ aborted
 - 产生 `message.part.updated`；
 - 只在稳定完成时形成最终 `finish=stop`。
 
+投影算法：
+
+- 每个 Run 创建一个 User Message；首次收到 `text.delta`、`tool.started` 或 `step.finished` 时创建本 Run 的 Assistant Message；
+- `messageRef` 映射为稳定 Gateway Message ID；同一 `messageRef` 的 delta 必须追加到同一文本 Part；缺失 `messageRef` 时使用当前 Run 的默认 Assistant Message；
+- `callRef` 映射为稳定 Gateway Tool Call ID；不同 `callRef` 即使工具名相同也必须分离；
+- `tool.started` 创建 Tool Part 和 `toolCalls` 条目；`tool.updated` 只更新对应 Part 的快照；`tool.completed` 更新 Part 并创建或更新唯一的 `role=tool` 结果消息；
+- 若 `tool.updated/tool.completed` 先于 `tool.started` 到达，Projector MUST 为该 `callRef` 合成初始 Tool Part，再应用事件；
+- 相同 `callRef`、事件类型和规范化内容的重复事件必须幂等；已完成 Tool Call 的冲突更新应忽略并记录警告；
+- `message.part.updated` 的 text `content` 和 tool `state` 均输出当前累计快照，不输出引擎私有 delta；
+- `step.finished(tool-calls)` 将 Assistant Message 的 `info.finish` 置为 `tool-calls` 并添加一次 `step-finish` Part，但 Run 保持活跃；
+- `run.settled` 时，最终 Assistant Message MUST 含 `step-finish` 且 `info.finish=stop`；若引擎未提供最终 `step.finished(stop)`，Projector 在结算时合成该规范结束标记；
+- `failed` 或 `aborted` 保留已经投影的部分文本和工具状态，但不得设置 `finish=stop`，也不得向北向 Tool Part 引入规范外状态；失败和中止只通过 Run、Session 事件与 HTTP 结果表达；
+- 投影顺序以 Coordinator 接收规范事件的单调序号为准，而非引擎时间戳；Message 数组按首次创建序号稳定排序。
+
 ### 8.5 Interaction Broker
 
 - 创建 Gateway Interaction ID；
@@ -371,6 +422,63 @@ accepted/running/waiting_* ── abort ──→ aborted
 ### 9.1 Adapter 接口
 
 ```typescript
+interface EngineConfig {
+  command: string;
+  version: string;
+  model: ResolvedModel;
+  startupTimeoutMs: number;
+  healthTimeoutMs: number;
+}
+
+interface EngineHealth {
+  ok: boolean;
+  version: string;
+  message?: string;
+}
+
+interface EngineSessionRef {
+  readonly opaqueId: string;
+}
+
+interface EngineInteractionRef {
+  readonly opaqueId: string;
+}
+
+interface SessionContext {
+  gatewaySessionId: string;
+  title: string;
+  directory: string;
+}
+
+interface RunInput {
+  gatewayRunId: string;
+  text: string;
+  model: ResolvedModel;
+}
+
+interface Question {
+  question: string;
+  options: Array<{ label: string; description?: string }>;
+}
+
+type PermissionDecision =
+  | { reply: "once" | "always"; message?: string }
+  | { reply: "reject"; message?: string };
+
+interface EngineError {
+  code: "INVALID_REQUEST" | "UNAVAILABLE" | "UPSTREAM_ERROR" | "TIMEOUT" | "INTERNAL";
+  message: string;
+  retryable: boolean;
+  cause?: unknown;
+}
+
+type RunResult =
+  | { state: "completed" }
+  | { state: "failed"; error: EngineError }
+  | { state: "aborted" };
+
+type EngineEventSink = (event: EngineEvent) => void | Promise<void>;
+
 interface HarnessAdapter {
   readonly name: string;
 
@@ -403,6 +511,17 @@ interface HarnessAdapter {
   stop(): Promise<void>;
 }
 ```
+
+生命周期约束：
+
+- `start()`、`abort()`、`deleteSession()` 和 `stop()` MUST 幂等；
+- `start()` 仅在版本校验和健康检查通过后 resolve；失败后允许再次调用；
+- `run()` MUST 串行 await `EngineEventSink`，不得并发投递同一 Run 的事件；Sink reject 时 Run 进入 `failed(INTERNAL)` 并尝试 Abort 引擎；
+- `run()` 返回的 `RunResult` 必须与最后一个规范终态事件一致，否则按 `INTERNAL_ERROR` 处理；
+- `abort()` 在底层执行已停止或已发出等价取消命令后 resolve；超过 Abort 宽限期由 Supervisor 强制终止相关进程；
+- `deleteSession()` 可对不存在或已删除的引擎 Session 调用并成功返回；
+- `stop()` 拒绝新 Session/Run，终止现有资源后返回；单个资源清理失败不得跳过其他资源；
+- `opaqueId` 和 `cause` 不得进入北向响应、SSE 或普通日志。
 
 ### 9.2 规范 Engine Event
 
@@ -462,6 +581,8 @@ OpenCode Adapter MUST 以 Session 稳定 Idle/终止语义完成 Run，不得仅
 
 ### 10.4 版本隔离
 
+- 当前基线为 `opencode-ai@1.18.26`；已在 Windows ARM64 验证 `opencode serve --hostname 127.0.0.1 --port <port> --pure` 启动且根路径返回 HTTP 200；
+- npm 安装 OpenCode 时必须允许其官方 `postinstall`，以选择与主机架构匹配的可执行文件；禁止把仅“包安装成功但二进制无法运行”视为健康；
 - 安装版本必须写入 lockfile；
 - 启动时读取并记录版本；
 - Adapter 测试使用固定原始事件 Fixture；
@@ -471,6 +592,8 @@ OpenCode Adapter MUST 以 Session 稳定 Idle/终止语义完成 Run，不得仅
 
 ### 11.1 首选接入形态
 
+- 当前基线为 `@earendil-works/pi-coding-agent@0.84.4`；已在 Windows ARM64 以 `pi --mode rpc --no-session --offline` 验证 JSONL `get_state` 请求/响应；
+- Windows PowerShell 执行策略阻止 npm `.ps1` shim 时，Supervisor MUST 解析并调用 `pi.cmd`/`opencode.cmd`，不得要求修改系统执行策略；
 - 通过 `pi --mode rpc` 使用 stdin/stdout JSONL；
 - 第一验证方案为每 Gateway Session 一个 Pi RPC 进程；
 - 每个进程以 Session `directory` 作为工作目录；
@@ -559,21 +682,35 @@ OpenCode Adapter MUST 以 Session 稳定 Idle/终止语义完成 Run，不得仅
 
 ## 13. Directory 与 Windows 语义
 
+- 规范入口为 `POST /session?directory=<URL-encoded Windows absolute path>`；为兼容评测客户端，MAY 同时接受请求体 `directory`；查询参数优先于请求体；
 - `directory` MUST 保持 Windows 绝对路径语义，不得转换为 POSIX 路径；
 - MUST 支持盘符、反斜杠、空格和中文；
 - Adapter 创建引擎 Session/进程时 MUST 使用该目录作为工作上下文；
 - 若请求未提供 `directory`，使用配置项 `GATEWAY_DEFAULT_DIRECTORY`；
+- Session 创建时 MUST 完成 URL 解码、绝对路径、存在性和目录类型校验；不存在、不是目录或不可访问时返回 `400 VALIDATION_ERROR`；Gateway v1 不自动创建目录；
+- Session 创建成功后 `directory` 不可修改；
 - Gateway MUST NOT 从 Prompt 文本解析路径来代替正式目录配置；
 - 绝对路径任务 MAY 由 Harness 直接处理，Gateway 不得改写 Prompt 中的路径；
 - 实际 Windows 测试 MUST 覆盖 `D:\test_data\OpenClaw学术洞察报告.docx`。
 
 ## 14. 模型策略
 
+```typescript
+interface ResolvedModel {
+  providerId: string;
+  modelId: string;
+  baseUrl?: string;
+  credentialRef: string;
+}
+```
+
+`credentialRef` 只引用进程内凭据，不携带密钥明文；该对象不得序列化到北向接口、SSE 或普通日志。
+
 - 比赛部署 MUST 使用 GLM-5.2；
 - 模型 Endpoint、Provider ID、Model ID 和密钥通过环境变量配置；
 - 北向请求 `model` 字段必须通过 Model Resolver；
 - Resolver 输出统一 `ResolvedModel`，Adapter 不直接解释北向 DTO；
-- 在 U-002 确认前，Resolver MUST 支持把评测 Provider/Model Alias 映射到 GLM-5.2；
+- Resolver MUST 支持把评测 Provider/Model Alias 映射到部署配置指定的模型，不把具体供应商语义泄漏到 Kernel；
 - 密钥不得写入仓库、SSE、消息历史和普通日志；
 - 两个引擎的正式对比 MUST 使用相同模型资源和等价参数。
 
@@ -602,6 +739,29 @@ OpenCode Adapter MUST 以 Session 稳定 Idle/终止语义完成 Run，不得仅
 | `PI_COMMAND` | Pi 可执行命令 |
 | `LOG_LEVEL` | 日志级别 |
 
+基线版本与默认限制：
+
+| 配置 | 默认值 |
+| --- | ---: |
+| Node.js | `24.19.0` |
+| npm | `11.17.0` |
+| OpenCode | `1.18.26` |
+| Pi | `0.84.4` |
+| `GATEWAY_RUN_TIMEOUT_MS` | `1800000`（30 分钟） |
+| `GATEWAY_ABORT_GRACE_MS` | `10000` |
+| `GATEWAY_ENGINE_STARTUP_TIMEOUT_MS` | `60000` |
+| `GATEWAY_ENGINE_HEALTH_TIMEOUT_MS` | `5000` |
+| `GATEWAY_SHUTDOWN_GRACE_MS` | `15000` |
+| `GATEWAY_MAX_SESSIONS` | `32` |
+| `GATEWAY_SSE_SUBSCRIBER_QUEUE_SIZE` | `1000` |
+| `GATEWAY_MAX_REQUEST_BYTES` | `1048576`（1 MiB） |
+
+- 数值配置必须是正整数且在启动时校验，非法值导致启动失败；
+- 达到最大 Session 数时，创建 Session 返回 `503 CAPACITY_EXCEEDED`；
+- 单订阅者 SSE 队列溢出时只断开该订阅者，不阻塞 Run，也不影响其他订阅者；
+- CLI 参数优先于环境变量，环境变量优先于默认值；未知 CLI 参数导致启动失败；
+- 正式启动必须校验 Node 与所选引擎版本完全匹配上述基线；开发模式 MAY 允许版本偏差，但必须输出显式警告。
+
 未知引擎值 MUST 启动失败并列出支持值。
 
 ## 16. 错误与恢复
@@ -615,6 +775,8 @@ OpenCode Adapter MUST 以 Session 稳定 Idle/终止语义完成 Run，不得仅
 | Session 正忙 | 409 | `SESSION_BUSY` |
 | Adapter/引擎请求失败 | 502 | `BAD_GATEWAY` |
 | 引擎未就绪或不可用 | 503 | `SERVICE_UNAVAILABLE` |
+| 达到 Session 容量 | 503 | `CAPACITY_EXCEEDED` |
+| Run 超时 | 504 | `RUN_TIMEOUT` |
 | 未分类内部异常 | 500 | `INTERNAL_ERROR` |
 
 ### 16.2 恢复规则
@@ -636,6 +798,18 @@ OpenCode Adapter MUST 以 Session 稳定 Idle/终止语义完成 Run，不得仅
 - Windows 退出时 MUST 清理子进程树；
 - Gateway MUST 处理 `SIGINT`/等价 Windows 终止信号并进行有界优雅退出；
 - 超时、最大 Session 数和最大事件队列长度 SHOULD 可配置。
+
+### 17.1 竞态与幂等裁决
+
+- Busy Session 的第二个 Prompt 原子检查失败并返回 `409 SESSION_BUSY`；
+- Session 删除开始后立即进入内部 `deleting` 状态并从公开查询结果中移除；后续操作按不存在返回 `404 NOT_FOUND`；
+- Busy Session 删除顺序为：标记 deleting、结束 Pending Interaction、请求 Abort、等待宽限期、必要时强杀进程、释放注册表记录；
+- Abort 与自然完成竞争时，第一个原子提交的终态获胜；若 Abort 已被 Coordinator 接受，则后续 `run.settled` 视为迟到事件；
+- Abort 被多次调用均返回 `{ "ok": true }`；
+- Interaction 首次回复原子写入结果并转发 Adapter；相同内容的重复回复返回 `{ "ok": true }`；不同内容的重复回复返回 `409 INTERACTION_RESOLVED`；
+- Abort 或删除被接受后，所有 Pending Interaction 转为 `expired`，之后的回复返回 `409 INTERACTION_RESOLVED`；
+- Gateway 退出时先停止接受新请求，再在 `GATEWAY_SHUTDOWN_GRACE_MS` 内 Abort 活跃 Run；超时后终止全部子进程树；
+- 任何锁只保护单个 Session 的短事务，不得在等待 Adapter、网络、Sink 或子进程时持有。
 
 ## 18. 可观测性
 
@@ -937,12 +1111,10 @@ solution/
 
 本 SPEC 进入 `Accepted` 状态前必须确认：
 
-1. `prompt_async` 的评测真实返回时机；
-2. GLM-5.2 Provider/Model 配置方式；
-3. OpenCode 与 Pi 的固定版本；
-4. Pi Question/Permission 的实现路线；
-5. Windows 评测环境是否提供 Node、Harness 和必要工具；
-6. `directory` 的真实传参方式；
-7. `office_011` 的评分关注最终产物还是桌面轨迹。
+1. Pi Question/Permission 的实现路线完成真实 RPC/Bridge Spike；
+2. 交付包在全新 Windows 环境按 `INSTRUCTION.md` 完成安装、启动和进程清理演练；
+3. `office_011` 的评分关注最终产物还是桌面轨迹；在赛题组未确认时按两者兼容实现和测试。
+
+已关闭项：`prompt_async` 返回时机由权威接口规范确认；OpenCode、Pi、Node/npm 固定版本已安装并完成基础烟测；`directory` 已采用查询参数、请求体兼容和默认目录三级解析契约。模型通过既有可替换配置处理，不作为 Kernel 开工门禁。
 
 在这些问题确认前，Gateway Kernel、Fake Adapter 和北向契约测试可以先行；任何依赖未知事实的实现必须保持可替换。
