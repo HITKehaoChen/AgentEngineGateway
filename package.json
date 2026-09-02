@@ -12,6 +12,8 @@
     "check": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/src/main.js",
     "dev": "tsx src/main.ts --engine fake",
+    "package:solution": "node scripts/phase4/package-solution.mjs",
+    "phase4:score": "node scripts/phase4/score-matrix.mjs",
     "test": "tsx --test tests/**/*.test.ts"
   },
   "devDependencies": {

@@ -69,6 +69,20 @@ test("engine unavailability maps to 503 for create and run",async()=>{
   adapter.failNextCreate();let response=await request("/session",{method:"POST",body:JSON.stringify({title:"unavailable"})});assert.equal(response.status,503);assert.equal((await response.json() as any).code,"SERVICE_UNAVAILABLE");const s=await session();adapter.enqueue([{type:"run.started"},{type:"run.failed",error:{code:"UNAVAILABLE",message:"engine exited",retryable:true}}]);response=await request(`/session/${s.id}/prompt_async`,{method:"POST",body:promptBody});assert.equal(response.status,503);assert.equal((await response.json() as any).code,"SERVICE_UNAVAILABLE");assert.equal((await (await request("/session/status")).json() as any)[s.id].type,"idle");
 });
 
+test("Phase 4 fault injection isolates a failed session from a healthy session",async()=>{
+  const failed=await session("故障会话"),healthy=await session("健康会话");
+  adapter.enqueue([{type:"run.started"},{type:"run.failed",error:{code:"UNAVAILABLE",message:"injected engine exit",retryable:true}}]);
+  adapter.enqueue([{type:"run.started"},{type:"text.delta",messageRef:"healthy",delta:"仍可用"},{type:"run.settled"}]);
+  const failedRun=request(`/session/${failed.id}/prompt_async`,{method:"POST",body:promptBody});
+  assert.equal((await failedRun).status,503);
+  const healthyRun=request(`/session/${healthy.id}/prompt_async`,{method:"POST",body:promptBody});
+  assert.equal((await healthyRun).status,204);
+  const statuses=await (await request("/session/status")).json() as any;
+  assert.equal(statuses[failed.id].type,"idle");assert.equal(statuses[healthy.id].type,"idle");
+  const messages=await (await request(`/session/${healthy.id}/message`)).json() as any[];
+  assert.equal(messages.find((message)=>message.role==="assistant").content,"仍可用");
+});
+
 test("malformed canonical engine events fail internally instead of being ignored",async()=>{
   const s=await session();adapter.enqueue([{type:"run.started"},{type:"text.delta",messageRef:42,delta:"invalid"} as unknown as FakeStep,{type:"run.settled"}]);const response=await request(`/session/${s.id}/prompt_async`,{method:"POST",body:promptBody});assert.equal(response.status,500);assert.equal((await response.json() as any).code,"INTERNAL_ERROR");assert.equal((await (await request("/session/status")).json() as any)[s.id].type,"idle");
 });

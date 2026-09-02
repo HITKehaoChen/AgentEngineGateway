@@ -1,0 +1,14 @@
+{
+  "model": "glm-5.2",
+  "notes": "在具备比赛模型凭据的 Windows 环境分别执行每个用例；空分数表示尚未执行，不代表 0 分。",
+  "cases": [
+    {
+      "id": "office_011",
+      "weight": 1,
+      "engines": {
+        "opencode": { "status": "pending", "score": null },
+        "pi": { "status": "pending", "score": null }
+      }
+    }
+  ]
+}
