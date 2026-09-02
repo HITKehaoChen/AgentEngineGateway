@@ -17,7 +17,7 @@ export type EngineEvent =
   | { type: "run.started" }
   | { type: "text.delta"; messageRef: string; delta: string }
   | { type: "tool.started"; callRef: string; name: string; title?: string; args?: unknown }
-  | { type: "tool.updated"; callRef: string; title?: string; output?: unknown }
+  | { type: "tool.updated"; callRef: string; title?: string; output?: unknown; args?: unknown }
   | { type: "tool.completed"; callRef: string; title?: string; output?: unknown; isError: boolean }
   | { type: "step.finished"; finish: "tool-calls" | "stop" }
   | { type: "question.requested"; interactionRef: EngineInteractionRef; questions: Question[] }

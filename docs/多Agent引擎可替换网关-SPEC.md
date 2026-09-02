@@ -593,7 +593,7 @@ OpenCode Adapter MUST 以 Session 稳定 Idle/终止语义完成 Run，不得仅
 ### 11.1 首选接入形态
 
 - 当前基线为 `@earendil-works/pi-coding-agent@0.84.4`；已在 Windows ARM64 以 `pi --mode rpc --no-session --offline` 验证 JSONL `get_state` 请求/响应；
-- Windows PowerShell 执行策略阻止 npm `.ps1` shim 时，Supervisor MUST 解析并调用 `pi.cmd`/`opencode.cmd`，不得要求修改系统执行策略；
+- Windows 下 Pi MUST 通过 `process.execPath` 直接执行锁定依赖中的 CLI JS；不依赖 npm `pi.ps1`/`pi.cmd` shim。OpenCode 的 Windows shim 处理仍按其 Adapter 实现；
 - 通过 `pi --mode rpc` 使用 stdin/stdout JSONL；
 - 第一验证方案为每 Gateway Session 一个 Pi RPC 进程；
 - 每个进程以 Session `directory` 作为工作目录；
@@ -1091,6 +1091,8 @@ Phase 0 非阻断遗留项及归属：
 
 ### Phase 2：OpenCode Adapter
 
+状态：**Complete / PASS（协议黑盒、真实 Fixture 回放与 Windows 启动基线）**（2026-09-02）。已完成 OpenCode `1.18.26` 的本地 Server Supervisor、HTTP Session/Prompt/Abort/Delete、Question/Permission Reply、SSE Session 分流与规范事件归一化；已修复 reasoning 泄漏、pending→running 工具参数丢失、GLM 配置未接入、SSE 断流未 Abort、控制请求无超时、CRLF 跨 chunk 解析、Reply 失败提前提交和端口监听失败清理问题，并由 20 项测试及真实本机启动/健康检查覆盖，详见 `docs/phase2-opencode-adapter.md`。具备比赛模型凭据后的完整真实 Prompt/Interaction E2E 仍归入交付演练，不在本地无凭据环境中虚报完成。
+
 交付：
 
 - 真实 Session、Prompt、Event、Abort、Question、Permission；
@@ -1098,6 +1100,8 @@ Phase 0 非阻断遗留项及归属：
 - 引擎版本锁定。
 
 ### Phase 3：Pi Adapter
+
+状态：**实现整改完成，待真实模型 E2E 与复审**（2026-09-02）。针对审查发现已补上生产 `--extension` Bridge、Pi `0.84.4` 项目依赖、Abort 请求合并及 `agent_settled` 先于 Abort response 的竞态回归；Permission Bridge 已保留 `patterns`、区分 `Once`/`Always`/`Reject`，并在 Pi Session 内缓存永久授权；Windows Pi CLI 改为直接执行锁定依赖中的 JS，拒绝 `.cmd/.bat` shell shim；`npm run check`、`npm test`（当前 31 项）与 `npm run build` 通过。按审查结论，本阶段暂不标记为 Complete / PASS；真实 GLM-5.2 Prompt/Interaction/Abort E2E 仍需在具备比赛模型凭据的环境执行，详见 `docs/phase3-pi-adapter.md`。
 
 交付：
 

@@ -34,7 +34,7 @@ export class MessageProjector {
       const key = JSON.stringify(event); if (p.seen.has(key)) return; p.seen.add(key);
       if (call.completed) return;
       if (event.type === "tool.started") { call.part.tool = event.name; if(event.title !== undefined) call.part.state.title = event.title; const tc=call.message.toolCalls!.find(x=>x.id===call!.id)!; tc.name=event.name; tc.arguments=event.args ?? {}; }
-      if (event.type === "tool.updated") { if (event.title !== undefined) call.part.state.title = event.title; call.output = event.output; }
+      if (event.type === "tool.updated") { if (event.title !== undefined) call.part.state.title = event.title; if (event.args !== undefined) call.message.toolCalls!.find(x=>x.id===call!.id)!.arguments = event.args; call.output = event.output; }
       if (event.type === "tool.completed") {
         call.part.state.status = "completed"; if (event.title !== undefined) call.part.state.title = event.title; call.output = event.output; call.completed = true;
         session.messages.push({ id: `msg_${randomUUID()}`, sessionId: session.id, role: "tool", content: this.stringify(event.output), toolCallId: call.id, toolName: call.part.tool, createdAt: new Date().toISOString() });

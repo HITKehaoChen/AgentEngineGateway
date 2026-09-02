@@ -83,6 +83,8 @@ AGENT_ENGINE=opencode  # 或 pi、hermes 等
 3. 确认两个引擎均可正常工作；
 4. 反复切换环境变量，验证引擎切换的稳定性。
 
+Pi 运行前应确认 `pi --version` 为 `0.84.4`。Windows 下使用 `PI_COMMAND=pi`，Adapter 会直接执行项目锁定依赖中的 CLI JS；自定义命令只接受原生可执行文件或 `.js` 文件，不接受 `.cmd/.bat` shim。Pi Adapter 会为每个 Gateway Session 创建独立 RPC 进程，并在删除 Session 或退出网关时清理进程树。
+
 ### 3.4 第四步：评测流程验证
 
 1. **Rollout 阶段验证**：让 Agent 在受控环境中执行任务，确认完整交互过程被正确记录；
