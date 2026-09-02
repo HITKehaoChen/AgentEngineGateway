@@ -49,7 +49,7 @@ $caseInsensitiveGroups = @(
 )
 Assert-Condition -Condition ($caseInsensitiveGroups.Count -eq 0) -Message (
     "Tracked paths collide on a case-insensitive Windows file system: " +
-    (($caseInsensitiveGroups.Group -join ", "))
+    ((@($caseInsensitiveGroups | ForEach-Object { $_.Group }) -join ", "))
 )
 
 $reservedNames = @(

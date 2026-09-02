@@ -1,0 +1,22 @@
+{
+  "name": "agent-engine-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.19.0",
+    "npm": "11.17.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/src/main.js",
+    "dev": "tsx src/main.ts --engine fake",
+    "test": "tsx --test tests/**/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "24.3.0",
+    "tsx": "4.20.5",
+    "typescript": "5.9.2"
+  }
+}

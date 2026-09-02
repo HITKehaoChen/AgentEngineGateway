@@ -1076,6 +1076,8 @@ Phase 0 非阻断遗留项及归属：
 
 ### Phase 1：Gateway Kernel + Fake Adapter
 
+状态：**Complete / PASS**（2026-09-02）。Gateway Kernel、全部北向接口、状态机、SSE、Message Projector、Interaction Broker 与可编程 Fake Adapter 已实现；类型检查、生产构建及 13 项黑盒契约测试全部通过，FR-003～FR-010 门禁关闭。显式 SSE 订阅者计数队列、HTTP 断连专用回归和真实进程退出验证等非门禁遗留已如实记录，验证详情见 `docs/phase1-gateway-kernel.md`。
+
 交付：
 
 - 全部北向接口；
