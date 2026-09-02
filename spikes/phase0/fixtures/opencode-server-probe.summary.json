@@ -1,0 +1,17 @@
+{
+  "question": {
+    "sessionID": "ses_f9fe79e3effevlQS4E1ses6N4d",
+    "requestID": "que_0601872fc001qQi1EIzzZfZioK",
+    "answer": "Alpha"
+  },
+  "permission": {
+    "sessionID": "ses_f9fe78796ffeyzk9jrFGZxWrlK",
+    "requestID": "per_0601880a1001H1tBO2ROzxmYqC",
+    "reply": "once"
+  },
+  "abort": {
+    "sessionID": "ses_f9fe75c48ffeLr6Gc2Gn3uusrq",
+    "acknowledged": true
+  },
+  "capturedEvents": 141
+}

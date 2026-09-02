@@ -1,0 +1,3 @@
+{"scenario":"abort","type":"run.started"}
+{"scenario":"abort","type":"text.delta","messageRef":"<stable-engine-message-ref>","delta":"<partial-text>"}
+{"scenario":"abort","type":"run.aborted"}

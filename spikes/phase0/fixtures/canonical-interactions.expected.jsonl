@@ -1,0 +1,12 @@
+{"scenario":"question","type":"run.started"}
+{"scenario":"question","type":"question.requested","interactionRef":"<engine-question-ref>","questions":[{"question":"Which option do you choose?","options":[{"label":"Alpha"},{"label":"Beta"}]}]}
+{"scenario":"question","type":"text.delta","messageRef":"<stable-engine-message-ref>","delta":"CHOICE:Alpha"}
+{"scenario":"question","type":"step.finished","finish":"stop"}
+{"scenario":"question","type":"run.settled"}
+{"scenario":"permission","type":"run.started"}
+{"scenario":"permission","type":"permission.requested","interactionRef":"<engine-permission-ref>","permission":"bash","patterns":["powershell -NoProfile -Command \"Write-Output PHASE0_PERMISSION_OK\""]}
+{"scenario":"permission","type":"tool.started","callRef":"<stable-engine-call-ref>","name":"bash"}
+{"scenario":"permission","type":"tool.completed","callRef":"<stable-engine-call-ref>","isError":false}
+{"scenario":"permission","type":"text.delta","messageRef":"<stable-engine-message-ref>","delta":"PHASE0_PERMISSION_DONE"}
+{"scenario":"permission","type":"step.finished","finish":"stop"}
+{"scenario":"permission","type":"run.settled"}

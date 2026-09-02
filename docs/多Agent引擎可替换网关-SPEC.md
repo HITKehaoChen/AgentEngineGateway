@@ -1,7 +1,7 @@
 # 多 Agent 引擎可替换网关 SPEC
 
 > 文档类型：Software Design and Development Specification（SDD Spec）  
-> 状态：Draft v0.2
+> 状态：Draft v0.3
 > 目标分支：`person_chenkehao`  
 > 适用阶段：初赛实现、联调、Windows 验证与交付验收
 
@@ -114,13 +114,13 @@ Gateway MUST NOT 理解或执行具体业务任务。例如“润色 docx 并另
 | D-010 | 引擎版本必须锁定，启动时必须记录并校验版本。 |
 | D-011 | 工具链基线锁定为 Node.js `24.19.0`、npm `11.17.0`、OpenCode `1.18.26`、Pi `0.84.4`；当前已在 Windows ARM64 验证安装，交付时按评测主机架构安装对应官方构建。升级任一组件必须重新执行 Adapter 黄金事件测试和 Windows E2E。 |
 | D-012 | `prompt_async` 按权威接口规范阻塞到本轮终态；客户端断开不隐式 Abort。U-001 关闭。 |
+| D-013 | Pi `0.84.4` 的 RPC Extension UI 已验证可通过 `extension_ui_request/response` 完成暂停、关联、回复和恢复；Pi Adapter 使用轻量 Bridge 将 dialog 映射为 Question/Permission。U-003 关闭。 |
+| D-014 | Pi 每 Session 一进程作为 v1 正式基线：Windows ARM64 同时启动 4 个 RPC 进程耗时 157ms，4 个均存活，总工作集约 270.3MiB，进程树清理后残留为 0。U-004 关闭；容量仍受 `GATEWAY_MAX_SESSIONS` 保护。 |
 
 ### 4.3 待验证项
 
 | ID | 待验证问题 | 区分证据 |
 | --- | --- | --- |
-| U-003 | Pi RPC 是否能完整承载权限与反问语义？ | 最小 Bridge/Extension Spike。 |
-| U-004 | Pi 每 Session 一进程在 Windows 下的启动成本和稳定性是否可接受？ | 并发与连续会话测试。 |
 | U-005 | Office 类任务按最终文件验收，还是要求真实桌面轨迹？ | 赛题组评分说明和 Rollout 采集方式。 |
 
 任一待验证项被事实推翻时，优先调整 Controller 或 Adapter，不改变 Gateway Kernel 的规范模型。
@@ -1047,6 +1047,8 @@ solution/
 
 门禁：至少确认两个 Harness 均能产生真实工具调用，才进入完整 Adapter 实现。
 
+状态：已通过。OpenCode `1.18.26` 与 Pi `0.84.4` 均已使用同一可替换开发模型完成真实中文路径读取工具调用；Question、Permission、Abort、稳定完成、异常退出和 Windows 进程树清理均已形成原始 Fixture 与映射结论，见 `spikes/phase0/`。
+
 ### Phase 1：Gateway Kernel + Fake Adapter
 
 交付：
@@ -1111,10 +1113,9 @@ solution/
 
 本 SPEC 进入 `Accepted` 状态前必须确认：
 
-1. Pi Question/Permission 的实现路线完成真实 RPC/Bridge Spike；
-2. 交付包在全新 Windows 环境按 `INSTRUCTION.md` 完成安装、启动和进程清理演练；
-3. `office_011` 的评分关注最终产物还是桌面轨迹；在赛题组未确认时按两者兼容实现和测试。
+1. 交付包在全新 Windows 环境按 `INSTRUCTION.md` 完成安装、启动和进程清理演练；
+2. `office_011` 的评分关注最终产物还是桌面轨迹；在赛题组未确认时按两者兼容实现和测试。
 
-已关闭项：`prompt_async` 返回时机由权威接口规范确认；OpenCode、Pi、Node/npm 固定版本已安装并完成基础烟测；`directory` 已采用查询参数、请求体兼容和默认目录三级解析契约。模型通过既有可替换配置处理，不作为 Kernel 开工门禁。
+已关闭项：`prompt_async` 返回时机由权威接口规范确认；OpenCode、Pi、Node/npm 固定版本已安装并完成基础烟测；`directory` 已采用查询参数、请求体兼容和默认目录三级解析契约；Pi Question/Permission Bridge、每 Session 一进程、Abort 和进程树清理已通过 Phase 0。模型通过既有可替换配置处理，不作为 Kernel 开工门禁。
 
 在这些问题确认前，Gateway Kernel、Fake Adapter 和北向契约测试可以先行；任何依赖未知事实的实现必须保持可替换。

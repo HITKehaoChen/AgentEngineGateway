@@ -1,0 +1,7 @@
+{"scenario":"tool-read","type":"run.started"}
+{"scenario":"tool-read","type":"tool.started","callRef":"<stable-engine-call-ref>","name":"read"}
+{"scenario":"tool-read","type":"tool.completed","callRef":"<stable-engine-call-ref>","isError":false}
+{"scenario":"tool-read","type":"step.finished","finish":"tool-calls"}
+{"scenario":"tool-read","type":"text.delta","messageRef":"<stable-engine-message-ref>","delta":"# 多 Agent 引擎可替换网关 SPEC"}
+{"scenario":"tool-read","type":"step.finished","finish":"stop"}
+{"scenario":"tool-read","type":"run.settled"}
